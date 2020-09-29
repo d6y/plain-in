@@ -5,30 +5,29 @@ import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 
 object PlainSQLExtras {
+  // Via: https://github.com/slick/slick/issues/1161#issuecomment-165996857
   import slick.jdbc.{PositionedParameters, SQLActionBuilder, SetParameter}
 
-  // Via: https://github.com/slick/slick/issues/1161#issuecomment-165996857
-  implicit class PlainOps(left: SQLActionBuilder) {
-
-    def ++(right: SQLActionBuilder): SQLActionBuilder = concat(left, right)
-
+  object Fragment {
     def inValues[T: SetParameter](xs: Seq[T]): SQLActionBuilder =
       xs match {
-        case Nil => left ++ sql"()"
+        case Nil => sql"()"
         case head :: tail =>
           val tailValues = tail.map(x => sql",$x")
-          val inPart     = sql"(" ++ tailValues.fold(sql"$head")(concat) ++ sql")"
-          concat(left, inPart)
+          sql"(" ++ tailValues.fold(sql"$head")(concat) ++ sql")"
       }
+  }
 
-    private def concat(a: SQLActionBuilder, b: SQLActionBuilder): SQLActionBuilder =
-      SQLActionBuilder(a.queryParts ++ b.queryParts, new SetParameter[Unit] {
-        def apply(p: Unit, pp: PositionedParameters): Unit = {
-          a.unitPConv.apply(p, pp)
-          b.unitPConv.apply(p, pp)
-        }
-      })
+  private def concat(a: SQLActionBuilder, b: SQLActionBuilder): SQLActionBuilder =
+    SQLActionBuilder(a.queryParts ++ b.queryParts, new SetParameter[Unit] {
+      def apply(p: Unit, pp: PositionedParameters): Unit = {
+        a.unitPConv.apply(p, pp)
+        b.unitPConv.apply(p, pp)
+      }
+    })
 
+  implicit class PlainOps(left: SQLActionBuilder) {
+    def ++(right: SQLActionBuilder): SQLActionBuilder = concat(left, right)
   }
 }
 
@@ -59,8 +58,9 @@ object Example {
 
   val values: Seq[Long] = List(5, 1, 4)
 
-  val q =
-    (sql"""select "id", "content" from "message" where "id" in """.inValues(values) ++ sql""" order by "id" desc """).as[(Long, Option[String])]
+  val q = (
+    sql"""select "id", "content" from "message" where "id" in """ ++ Fragment.inValues(values) ++ sql""" order by "id" desc """
+  ).as[(Long, Option[String])]
 
   val program = for {
     _       <- messages.schema.create
