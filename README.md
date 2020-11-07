@@ -4,13 +4,13 @@
 
 Use it like this:
 
-```
+```scala
 import PlainSQLExtras._
 
-  val values: Seq[Long] = List(5, 1, 4)
+val values: Seq[Long] = List(5, 1, 4)
 
 val q = (
   sql"select id from message where id in " ++ Fragment.inValues(values) ++ sql" order by id"
-).as[(Long, Option[String])]
+).as[Long]
 
 ```
